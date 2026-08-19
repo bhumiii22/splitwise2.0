@@ -4,39 +4,58 @@ import { prisma } from "@/lib/prisma"
 
 export async function POST(
   req: Request,
-  { params }: { params: Promise<{ id: string }> }  // 👈 params is now a Promise in Next.js 15
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // 👇 Must await params before using
     const { id } = await params
 
     const user = await getUserFromCookies()
+
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      )
     }
 
     const body = await req.json()
     const { title, amount, category, splitType, paidById } = body
 
     if (!title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Title is required" },
+        { status: 400 }
+      )
     }
+
     if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-      return NextResponse.json({ error: "Valid amount required" }, { status: 400 })
+      return NextResponse.json(
+        { error: "Valid amount required" },
+        { status: 400 }
+      )
     }
 
     const group = await prisma.group.findUnique({
-      where: { id },   // 👈 use id directly
+      where: { id },
       include: { members: true },
     })
 
     if (!group) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 })
+      return NextResponse.json(
+        { error: "Group not found" },
+        { status: 404 }
+      )
     }
 
-    const isMember = group.members.some((m) => m.userId === user.id)
+    const isMember = group.members.some(
+      (m) => m.userId === user.id
+    )
+
     if (!isMember) {
-      return NextResponse.json({ error: "Not a member" }, { status: 403 })
+      return NextResponse.json(
+        { error: "Not a member" },
+        { status: 403 }
+      )
     }
 
     const parsedAmount = Number(amount)
@@ -51,6 +70,7 @@ export async function POST(
         amount: parsedAmount,
         category: category ?? "general",
         splitType: splitType ?? "equal",
+
         splits: {
           create: group.members.map((member) => ({
             userId: member.userId,
@@ -59,31 +79,35 @@ export async function POST(
           })),
         },
       },
+
       include: {
         paidBy: true,
-        splits: { include: { user: true } },
+        splits: {
+          include: {
+            user: true,
+          },
+        },
       },
     })
+
+    // Broadcast the new expense to everyone viewing this group
     const io = (global as any).io
-if (io) {
-  io.to(`group:${group.id}`).emit("expense:added", {
-    expense,
-    addedBy: user.name,
-  })
-}
-// Broadcast to everyone currently viewing this group
-const io = (global as any).io
-if (io) {
-  io.to(`group:${group.id}`).emit("expense:added", {
-    expense,
-    addedBy: user.name,
-  })
-  console.log(`[Socket] Broadcasted to group:${group.id}`)
-}
+
+    if (io) {
+      io.to(`group:${group.id}`).emit("expense:added", {
+        expense,
+        addedBy: user.name,
+      })
+
+      console.log(
+        `[Socket] Broadcasted to group:${group.id}`
+      )
+    }
 
     return NextResponse.json(expense)
   } catch (error: any) {
     console.error("Expense error:", error)
+
     return NextResponse.json(
       { error: error?.message ?? "Something went wrong" },
       { status: 500 }

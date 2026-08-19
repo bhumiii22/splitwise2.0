@@ -52,9 +52,9 @@ useEffect(() => {
 }, [socket, group.id])
 
   function copyInvite() {
-    navigator.clipboard.writeText(`${window.location.origin}/join/${inviteCode}`)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+    navigator.clipboard.writeText(inviteCode)
+  setCopied(true)
+  setTimeout(() => setCopied(false), 2000)
   }
 
   // Build clear settle-up suggestions
