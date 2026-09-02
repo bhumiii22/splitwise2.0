@@ -9,6 +9,7 @@ import Link from "next/link"
 import { ArrowUpRight, ArrowDownLeft, Users, Wallet, TrendingUp, Plus } from "lucide-react"
 import GroupCards from "@/components/group-cards"
 import JoinGroupButton from "@/components/join-group-button"
+import UpiSettings from "@/components/upi-settings"
 
 export default async function Dashboard() {
   const session = await getServerSession(authOptions)
@@ -66,6 +67,10 @@ export default async function Dashboard() {
     <CreateGroupButton />
   </div>
 </div>
+
+<UpiSettings currentUpiId={user.upiId} />
+
+
 
       {/* Stat cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 36 }} className="stats-grid">
