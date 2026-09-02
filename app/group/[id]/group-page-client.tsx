@@ -304,7 +304,14 @@ async function markAsPaid(toUserId: string, amount: number) {
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {settlements.map((s, i) => {
                   const isMe = s.from?.id === currentUserId
-                  const upiLink = `upi://pay?pa=${s.to?.upiId ?? ""}&am=${s.amount.toFixed(2)}&tn=Splitwise+Settlement`
+                  // const upiLink = `upi://pay?pa=${s.to?.upiId ?? ""}&am=${s.amount.toFixed(2)}&tn=Splitwise+Settlement`
+                  const upiLink = s.to?.upiId
+  ? `upi://pay?pa=${encodeURIComponent(s.to.upiId)}&pn=${encodeURIComponent(
+      s.to.name ?? ""
+    )}&am=${s.amount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(
+      "Splitwise Settlement"
+    )}`
+  : null;
 
                   return (
                     <div key={i} style={{
@@ -350,7 +357,7 @@ async function markAsPaid(toUserId: string, amount: number) {
 
                 {isMe && (
                 <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <a
+                  {/* <a
                     href={`upi://pay?pa=${s.to?.upiId ?? "upi@bank"}&am=${s.amount.toFixed(
                       2
                     )}&tn=Splitwise`}
@@ -368,7 +375,39 @@ async function markAsPaid(toUserId: string, amount: number) {
                     }}
                   >
                     📲 Pay via UPI
-                  </a>
+                  </a> */}
+                  {upiLink ? (
+  <a
+    href={upiLink}
+    style={{
+      flex: 1,
+      textAlign: "center",
+      padding: "8px 0",
+      borderRadius: 8,
+      fontSize: 12,
+      fontWeight: 600,
+      background: "rgba(99,102,241,0.15)",
+      border: "1px solid rgba(99,102,241,0.3)",
+      color: "#818cf8",
+      textDecoration: "none",
+    }}
+  >
+    📲 Pay via UPI
+  </a>
+) : (
+  <span
+    style={{
+      flex: 1,
+      textAlign: "center",
+      padding: "8px 0",
+      borderRadius: 8,
+      fontSize: 12,
+      color: "rgba(255,255,255,0.3)",
+    }}
+  >
+    UPI not added
+  </span>
+)}
 
                   <button
                     onClick={() => markAsPaid(s.to?.id, s.amount)}
