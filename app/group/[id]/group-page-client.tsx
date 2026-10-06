@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils"
 import AddExpenseModal from "@/components/add-expense-modal"
-import { ArrowLeft, Copy, Plus, Check } from "lucide-react"
+import EditExpenseModal from "@/components/edit-expense-modal"
+import { ArrowLeft, Copy, Plus, Check,Pencil } from "lucide-react"
 import { useSocket } from "@/hooks/use-socket"
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -27,6 +28,7 @@ export default function GroupPageClient({
   group, currentUserId, balances, totalSpend, myBalance, inviteCode
 }: Props) {
  const [showExpenseModal, setShowExpenseModal] = useState(false)
+ const [expenseToEdit, setExpenseToEdit] = useState<any | null>(null)
 const [copied, setCopied] = useState(false)
 const [expenses, setExpenses] = useState<any[]>(group.expenses)
 const [toast, setToast] = useState<string | null>(null)
@@ -44,10 +46,28 @@ useEffect(() => {
     setToast(`${addedBy} just added "${expense.title}"`)
     setTimeout(() => setToast(null), 3000)
   })
+  socket.on("expense:updated", ({ expense, updatedBy }) => {
+  setExpenses((prev) =>
+    prev.map((existingExpense) =>
+      existingExpense.id === expense.id
+        ? expense
+        : existingExpense
+    )
+  )
+
+  setToast(
+    `${updatedBy} updated "${expense.title}"`
+  )
+
+  setTimeout(() => setToast(null), 3000)
+
+  router.refresh()
+})
 
   return () => {
     socket.emit("leave-group", group.id)
     socket.off("expense:added")
+    socket.off("expense:updated")
   }
 }, [socket, group.id])
 
@@ -230,8 +250,25 @@ async function markAsPaid(toUserId: string, amount: number) {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {expenses.map((expense: any) => {
-                const paidByMe = expense.paidById === currentUserId
-                const myShareSplit = expense.splits?.find((s: any) => s.userId === currentUserId)
+  const paidByMe =
+    expense.paidById === currentUserId
+
+  const currentMember = group.members.find(
+    (member: any) =>
+      member.userId === currentUserId
+  )
+
+  const isGroupAdmin =
+    currentMember?.role === "admin" ||
+    group.createdById === currentUserId
+
+  const canEdit =
+    paidByMe || isGroupAdmin
+
+  const myShareSplit = expense.splits?.find(
+    (s: any) =>
+      s.userId === currentUserId
+  )
                 const myShare = myShareSplit?.amount ?? 0
                 const isSettled = myShareSplit?.isSettled ?? false
 
@@ -263,21 +300,88 @@ async function markAsPaid(toUserId: string, amount: number) {
                       </p>
                     </div>
 
-                    {/* Amount */}
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0 }}>
-                        {formatCurrency(expense.amount)}
-                      </p>
-                      {paidByMe ? (
-                        <p style={{ fontSize: 12, color: "#34d399", margin: "2px 0 0" }}>you paid</p>
-                      ) : isSettled ? (
-                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: "2px 0 0" }}>settled</p>
-                      ) : (
-                        <p style={{ fontSize: 12, color: "#fb7185", margin: "2px 0 0" }}>
-                          you owe {formatCurrency(myShare)}
-                        </p>
-                      )}
-                    </div>
+                    {/* Amount + Edit */}
+<div
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 12,
+    flexShrink: 0,
+  }}
+>
+  <div style={{ textAlign: "right" }}>
+    <p
+      style={{
+        fontSize: 15,
+        fontWeight: 700,
+        color: "#fff",
+        margin: 0,
+      }}
+    >
+      {formatCurrency(expense.amount)}
+    </p>
+
+    {paidByMe ? (
+      <p
+        style={{
+          fontSize: 12,
+          color: "#34d399",
+          margin: "2px 0 0",
+        }}
+      >
+        you paid
+      </p>
+    ) : isSettled ? (
+      <p
+        style={{
+          fontSize: 12,
+          color:
+            "rgba(255,255,255,0.25)",
+          margin: "2px 0 0",
+        }}
+      >
+        settled
+      </p>
+    ) : (
+      <p
+        style={{
+          fontSize: 12,
+          color: "#fb7185",
+          margin: "2px 0 0",
+        }}
+      >
+        you owe {formatCurrency(myShare)}
+      </p>
+    )}
+  </div>
+
+  {canEdit && (
+    <button
+      onClick={(event) => {
+        event.stopPropagation()
+        setExpenseToEdit(expense)
+      }}
+      title="Edit expense"
+      aria-label={`Edit ${expense.title}`}
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 8,
+        border:
+          "1px solid rgba(129,140,248,0.2)",
+        background:
+          "rgba(129,140,248,0.08)",
+        color: "#818cf8",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Pencil size={14} />
+    </button>
+  )}
+</div>
                   </div>
                 )
               })}
@@ -510,6 +614,18 @@ async function markAsPaid(toUserId: string, amount: number) {
           </div>
         </div>
       </div>
+      {expenseToEdit && (
+  <EditExpenseModal
+    group={group}
+    expense={expenseToEdit}
+    currentUserId={currentUserId}
+    onClose={() => setExpenseToEdit(null)}
+    onSuccess={() => {
+      setExpenseToEdit(null)
+      router.refresh()
+    }}
+  />
+)}
 
       {showExpenseModal && (
         <AddExpenseModal
