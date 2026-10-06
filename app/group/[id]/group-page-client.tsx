@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils"
 import AddExpenseModal from "@/components/add-expense-modal"
+import ExpenseDetailModal from "@/components/expense-detail-modal"
 import { ArrowLeft, Copy, Plus, Check } from "lucide-react"
 import { useSocket } from "@/hooks/use-socket"
 
@@ -27,6 +28,7 @@ export default function GroupPageClient({
   group, currentUserId, balances, totalSpend, myBalance, inviteCode
 }: Props) {
  const [showExpenseModal, setShowExpenseModal] = useState(false)
+ const [selectedExpense, setSelectedExpense] = useState<any | null>(null)
 const [copied, setCopied] = useState(false)
 const [expenses, setExpenses] = useState<any[]>(group.expenses)
 const [toast, setToast] = useState<string | null>(null)
@@ -236,12 +238,24 @@ async function markAsPaid(toUserId: string, amount: number) {
                 const isSettled = myShareSplit?.isSettled ?? false
 
                 return (
-                  <div key={expense.id} style={{
-                    padding: "14px 16px",
-                    background: "rgba(255,255,255,0.03)",
+                  <div
+  key={expense.id}
+  onClick={() => setSelectedExpense(expense)}
+  role="button"
+  tabIndex={0}
+  onKeyDown={(event) => {
+    if (event.key === "Enter" || event.key === " ") {
+      setSelectedExpense(expense)
+    }
+  }}
+  style={{
+    padding: "14px 16px",
+    background: "rgba(255,255,255,0.03)",
                     border: "1px solid rgba(255,255,255,0.07)",
                     borderRadius: 12,
                     display: "flex", alignItems: "center", gap: 12,
+                    cursor: "pointer",
+                    transition: "all 0.2s",
                   }}>
                     {/* Icon */}
                     <div style={{
@@ -510,6 +524,14 @@ async function markAsPaid(toUserId: string, amount: number) {
           </div>
         </div>
       </div>
+
+      {selectedExpense && (
+  <ExpenseDetailModal
+    expense={selectedExpense}
+    currentUserId={currentUserId}
+    onClose={() => setSelectedExpense(null)}
+  />
+)}
 
       {showExpenseModal && (
         <AddExpenseModal
