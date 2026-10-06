@@ -15,6 +15,7 @@ import {
   Trash2,
   X,
 } from "lucide-react"
+
 import { useSocket } from "@/hooks/use-socket"
 
 const CATEGORY_ICONS: Record<string, string> = {
@@ -113,12 +114,47 @@ async function deleteExpense() {
   }
 }
 
-  function copyInvite() {
-    navigator.clipboard.writeText(inviteCode)
+function getInviteLink() {
+  return `${window.location.origin}/join/${inviteCode}`
+}
+
+async function copyInvite() {
+  const inviteLink = getInviteLink()
+
+  await navigator.clipboard.writeText(inviteLink)
+
   setCopied(true)
   setTimeout(() => setCopied(false), 2000)
-  }
+}
 
+function shareOnWhatsApp() {
+  const inviteLink = getInviteLink()
+
+  const message = `Join my Splitwise group! ${inviteLink}`
+
+  window.open(
+    `https://wa.me/?text=${encodeURIComponent(message)}`,
+    "_blank"
+  )
+}
+
+async function shareInvite() {
+  const inviteLink = getInviteLink()
+
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: `Join ${group.name}`,
+        text: "Join my Splitwise group!",
+        url: inviteLink,
+      })
+    } catch (error) {
+      // User cancelled the share dialog
+    }
+  } else {
+    await copyInvite()
+  }
+}
   // Build clear settle-up suggestions
   
   // "Ishaa owes Mrunal ₹500" or "Mrunal owes Ishaa ₹2000"
@@ -640,13 +676,79 @@ async function markAsPaid(toUserId: string, amount: number) {
                 {copied ? <Check size={13} /> : <Copy size={13} />}
               </button>
             </div>
-            <button onClick={copyInvite} style={{
-              width: "100%", padding: "9px 0", borderRadius: 9, fontSize: 13, fontWeight: 500,
-              border: "1px solid rgba(99,102,241,0.3)", background: "rgba(99,102,241,0.1)",
-              color: "#818cf8", cursor: "pointer", fontFamily: "inherit", transition: "all 0.2s",
-            }}>
-              {copied ? "✓ Copied!" : "Copy invite link"}
-            </button>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+
+  <button
+    onClick={copyInvite}
+    style={{
+      width: "100%",
+      padding: "9px 0",
+      borderRadius: 9,
+      fontSize: 13,
+      fontWeight: 500,
+      border: "1px solid rgba(99,102,241,0.3)",
+      background: "rgba(99,102,241,0.1)",
+      color: "#818cf8",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      transition: "all 0.2s",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    }}
+  >
+    {copied ? <Check size={14} /> : <Copy size={14} />}
+    {copied ? "Copied!" : "Copy invite link"}
+  </button>
+
+  <button
+    onClick={shareOnWhatsApp}
+    style={{
+      width: "100%",
+      padding: "9px 0",
+      borderRadius: 9,
+      fontSize: 13,
+      fontWeight: 500,
+      border: "1px solid rgba(37,211,102,0.25)",
+      background: "rgba(37,211,102,0.08)",
+      color: "#4ade80",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    }}
+  >
+    <MessageCircle size={14} />
+    Share on WhatsApp
+  </button>
+
+  <button
+    onClick={shareInvite}
+    style={{
+      width: "100%",
+      padding: "9px 0",
+      borderRadius: 9,
+      fontSize: 13,
+      fontWeight: 500,
+      border: "1px solid rgba(255,255,255,0.1)",
+      background: "rgba(255,255,255,0.04)",
+      color: "rgba(255,255,255,0.65)",
+      cursor: "pointer",
+      fontFamily: "inherit",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 7,
+    }}
+  >
+    <Share2 size={14} />
+    Share invite
+  </button>
+
+</div>
           </div>
         </div>
       </div>
