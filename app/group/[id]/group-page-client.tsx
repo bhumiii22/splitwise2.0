@@ -13,11 +13,9 @@ import {
   Check,
   Share2,
   MessageCircle,
-} from "lucide-react"
   Trash2,
   X,
 } from "lucide-react"
-
 import { useSocket } from "@/hooks/use-socket"
 
 const CATEGORY_ICONS: Record<string, string> = {
