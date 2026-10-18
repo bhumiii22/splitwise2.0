@@ -1,12 +1,23 @@
 "use client"
 
-import { useState,useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils"
 import AddExpenseModal from "@/components/add-expense-modal"
+import ExpenseDetailModal from "@/components/expense-detail-modal"
+import {
+  ArrowLeft,
+  Copy,
+  Plus,
+  Check,
+  Share2,
+  MessageCircle,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react"
 import { useSocket } from "@/hooks/use-socket"
-import { ArrowLeft, Copy, Plus, Check, Share2, MessageCircle, Search, X } from "lucide-react"
 
 const CATEGORY_ICONS: Record<string, string> = {
   food: "🍕", transport: "🚗", accommodation: "🏠",
@@ -27,38 +38,103 @@ export default function GroupPageClient({
   group, currentUserId, balances, totalSpend, myBalance, inviteCode
 }: Props) {
  const [showExpenseModal, setShowExpenseModal] = useState(false)
+ const [selectedExpense, setSelectedExpense] = useState<any | null>(null)
 const [copied, setCopied] = useState(false)
-const [expenses, setExpenses] = useState<any[]>(group.expenses)
+const [expenses, setExpenses] = useState<any[]>(group.expenses ?? [])
 const [toast, setToast] = useState<string | null>(null)
-const [searchQuery, setSearchQuery] = useState("")
+const [expenseToDelete, setExpenseToDelete] = useState<any | null>(null)
+const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null)
+const [expenseSearch, setExpenseSearch] = useState("")
 
 const router = useRouter()
 const socket = useSocket()
 
-const filteredExpenses = expenses.filter((expense: any) =>
-  (expense.title ?? "")
-    .toLowerCase()
-    .includes(searchQuery.trim().toLowerCase())
-)
+const filteredExpenses = expenses.filter((expense: any) => {
+  const query = expenseSearch.trim().toLowerCase()
+  if (!query) return true
+
+  return [
+    expense.title,
+    expense.category,
+    expense.paidBy?.name,
+    formatDate(expense.createdAt),
+    String(expense.amount ?? ""),
+  ].some((value) => String(value ?? "").toLowerCase().includes(query))
+})
 
 useEffect(() => {
   if (!socket) return
+
   socket.emit("join-group", group.id)
 
-  socket.on("expense:added", ({ expense, addedBy }) => {
-    setExpenses(prev => [expense, ...prev])
-    // Show toast notification
+  const handleExpenseAdded = ({ expense, addedBy }: any) => {
+    setExpenses((previous) => {
+      // Avoid duplicate entries if the server broadcasts to the creator too.
+      if (previous.some((item) => item.id === expense.id)) return previous
+      return [expense, ...previous]
+    })
     setToast(`${addedBy} just added "${expense.title}"`)
-    setTimeout(() => setToast(null), 3000)
-  })
+    window.setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleExpenseDeleted = ({ expenseId, deletedBy }: any) => {
+    setExpenses((previous) => previous.filter((expense) => expense.id !== expenseId))
+    setToast(`${deletedBy} deleted an expense`)
+    window.setTimeout(() => setToast(null), 3000)
+    router.refresh()
+  }
+
+  socket.on("expense:added", handleExpenseAdded)
+  socket.on("expense:deleted", handleExpenseDeleted)
 
   return () => {
     socket.emit("leave-group", group.id)
-    socket.off("expense:added")
+    socket.off("expense:added", handleExpenseAdded)
+    socket.off("expense:deleted", handleExpenseDeleted)
   }
-}, [socket, group.id])
+}, [socket, group.id, router])
 
-  function getInviteLink() {
+async function deleteExpense() {
+  if (!expenseToDelete) return
+
+  setDeletingExpenseId(expenseToDelete.id)
+
+  try {
+    const response = await fetch(
+      `/api/groups/${group.id}/expenses/${expenseToDelete.id}`,
+      {
+        method: "DELETE",
+      }
+    )
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ?? "Failed to delete expense"
+      )
+    }
+
+    setExpenses((prev) =>
+      prev.filter(
+        (expense) => expense.id !== expenseToDelete.id
+      )
+    )
+
+    setExpenseToDelete(null)
+
+    setToast("Expense deleted successfully")
+    setTimeout(() => setToast(null), 3000)
+
+    router.refresh()
+  } catch (error: any) {
+    alert(error.message)
+  } finally {
+    setDeletingExpenseId(null)
+  }
+}
+
+function getInviteLink() {
   return `${window.location.origin}/join/${inviteCode}`
 }
 
@@ -101,6 +177,7 @@ async function shareInvite() {
 }
   // Build clear settle-up suggestions
   
+  // "Ishaa owes Mrunal ₹500" or "Mrunal owes Ishaa ₹2000"
   const settlements: { from: any; to: any; amount: number }[] = []
   const memberMap = Object.fromEntries(group.members.map((m: any) => [m.userId, m.user]))
 
@@ -153,7 +230,17 @@ async function markAsPaid(toUserId: string, amount: number) {
 
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 1100, margin: "0 auto" }}>
+    <div
+      className="group-page-container"
+      style={{
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        width: "100%",
+        maxWidth: 1100,
+        margin: "0 auto",
+        padding: "0 16px 32px",
+        overflowX: "hidden",
+      }}
+    >
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
@@ -180,7 +267,7 @@ async function markAsPaid(toUserId: string, amount: number) {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="group-header-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={copyInvite} style={{
               display: "flex", alignItems: "center", gap: 7,
               padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 500,
@@ -205,7 +292,10 @@ async function markAsPaid(toUserId: string, amount: number) {
       </div>
 
       {/* Summary strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 28 }}>
+      <div
+        className="group-summary-grid"
+        style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 28 }}
+      >
         {[
           {
             label: "Total Spent",
@@ -250,277 +340,208 @@ async function markAsPaid(toUserId: string, amount: number) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }} className="group-layout">
         <style>{`@media(max-width:900px){.group-layout{grid-template-columns:1fr!important}}`}</style>
 
-        
-{/* Left — Expenses */}
-<div style={{ minWidth: 0 }}>
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      flexWrap: "wrap",
-      gap: 12,
-      marginBottom: 12,
-    }}
-  >
-    <p
-      style={{
-        fontSize: 12,
-        fontWeight: 600,
-        color: "rgba(255,255,255,0.35)",
-        textTransform: "uppercase",
-        letterSpacing: "0.07em",
-        margin: 0,
-      }}
-    >
-      Expenses
-    </p>
+        {/* Left — Expenses */}
+        <div>
+          <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
+            Expenses
+          </p>
 
-    {expenses.length > 0 && (
-      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
-        {filteredExpenses.length} of {expenses.length}
-      </span>
-    )}
-  </div>
-
-  {/* Search expenses */}
-  {expenses.length > 0 && (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "0 12px",
-        marginBottom: 14,
-        background: "rgba(255,255,255,0.04)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        borderRadius: 10,
-      }}
-    >
-      <Search size={16} color="rgba(255,255,255,0.35)" />
-
-      <input
-        type="search"
-        aria-label="Search expenses"
-        placeholder="Search expenses by name..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          padding: "12px 0",
-          background: "transparent",
-          border: "none",
-          outline: "none",
-          color: "#fff",
-          fontSize: 13,
-          fontFamily: "inherit",
-        }}
-      />
-
-      {searchQuery && (
-        <button
-          type="button"
-          onClick={() => setSearchQuery("")}
-          aria-label="Clear expense search"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 4,
-            border: "none",
-            background: "transparent",
-            color: "rgba(255,255,255,0.5)",
-            cursor: "pointer",
-          }}
-        >
-          <X size={15} />
-        </button>
-      )}
-    </div>
-  )}
-
-  {expenses.length === 0 ? (
-    <div
-      style={{
-        padding: "48px 24px",
-        background: "rgba(255,255,255,0.02)",
-        border: "1px dashed rgba(255,255,255,0.07)",
-        borderRadius: 16,
-        textAlign: "center",
-      }}
-    >
-      <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
-      <p
-        style={{
-          fontSize: 14,
-          color: "rgba(255,255,255,0.5)",
-          margin: "0 0 16px",
-        }}
-      >
-        No expenses yet
-      </p>
-      <button
-        onClick={() => setShowExpenseModal(true)}
-        style={{
-          padding: "9px 18px",
-          borderRadius: 10,
-          fontSize: 13,
-          fontWeight: 600,
-          border: "none",
-          background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-          color: "#fff",
-          cursor: "pointer",
-          fontFamily: "inherit",
-        }}
-      >
-        Add first expense
-      </button>
-    </div>
-  ) : filteredExpenses.length === 0 ? (
-    <div
-      style={{
-        padding: "36px 20px",
-        background: "rgba(255,255,255,0.02)",
-        border: "1px dashed rgba(255,255,255,0.07)",
-        borderRadius: 16,
-        textAlign: "center",
-      }}
-    >
-      <Search
-        size={26}
-        color="rgba(255,255,255,0.3)"
-        style={{ margin: "0 auto 10px" }}
-      />
-      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", margin: "0 0 6px" }}>
-        No expenses found
-      </p>
-      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: 0 }}>
-        Try another search term.
-      </p>
-      <button
-        type="button"
-        onClick={() => setSearchQuery("")}
-        style={{
-          marginTop: 14,
-          padding: "8px 14px",
-          borderRadius: 8,
-          border: "1px solid rgba(99,102,241,0.3)",
-          background: "rgba(99,102,241,0.1)",
-          color: "#a5b4fc",
-          cursor: "pointer",
-          fontSize: 12,
-        }}
-      >
-        Clear search
-      </button>
-    </div>
-  ) : (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {filteredExpenses.map((expense: any) => {
-        const paidByMe = expense.paidById === currentUserId
-        const myShareSplit = expense.splits?.find(
-          (s: any) => s.userId === currentUserId
-        )
-        const myShare = myShareSplit?.amount ?? 0
-        const isSettled = myShareSplit?.isSettled ?? false
-
-        return (
-          <div
-            key={expense.id}
-            style={{
-              padding: "14px 16px",
-              background: "rgba(255,255,255,0.03)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              borderRadius: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              minWidth: 0,
-            }}
-          >
-            {/* Icon */}
-            <div
-              style={{
-                width: 38,
-                height: 38,
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.05)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontSize: 18,
-                flexShrink: 0,
-              }}
-            >
-              {CATEGORY_ICONS[expense.category] ?? "📦"}
+          {expenses.length === 0 ? (
+            <div style={{ padding: "48px 24px", background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.07)", borderRadius: 16, textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
+              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", margin: "0 0 16px" }}>No expenses yet</p>
+              <button onClick={() => setShowExpenseModal(true)} style={{
+                padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+                color: "#fff", cursor: "pointer", fontFamily: "inherit",
+              }}>
+                Add first expense
+              </button>
             </div>
-
-            {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p
+          ) : (
+            <>
+              <div
                 style={{
-                  fontSize: 14,
-                  fontWeight: 500,
-                  color: "#fff",
-                  margin: 0,
-                  overflowWrap: "anywhere",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "0 12px",
+                  marginBottom: 12,
+                  minHeight: 44,
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "rgba(255,255,255,0.03)",
+                  borderRadius: 12,
                 }}
               >
-                {expense.title}
-              </p>
-              <p
-                style={{
-                  fontSize: 12,
-                  color: "rgba(255,255,255,0.3)",
-                  margin: "2px 0 0",
-                }}
-              >
-                Paid by {paidByMe ? "you" : expense.paidBy?.name?.split(" ")[0]}{" "}
-                · {formatDate(expense.createdAt)}
-              </p>
-            </div>
-
-            {/* Amount */}
-            <div style={{ textAlign: "right", flexShrink: 0 }}>
-              <p
-                style={{
-                  fontSize: 15,
-                  fontWeight: 700,
-                  color: "#fff",
-                  margin: 0,
-                }}
-              >
-                {formatCurrency(expense.amount)}
-              </p>
-
-              {paidByMe ? (
-                <p style={{ fontSize: 12, color: "#34d399", margin: "2px 0 0" }}>
-                  you paid
-                </p>
-              ) : isSettled ? (
-                <p
+                <Search size={16} color="rgba(255,255,255,0.4)" />
+                <input
+                  type="search"
+                  value={expenseSearch}
+                  onChange={(event) => setExpenseSearch(event.target.value)}
+                  placeholder="Search expenses by title, category, payer..."
+                  aria-label="Search expenses"
                   style={{
-                    fontSize: 12,
-                    color: "rgba(255,255,255,0.25)",
-                    margin: "2px 0 0",
+                    flex: 1,
+                    minWidth: 0,
+                    border: "none",
+                    outline: "none",
+                    background: "transparent",
+                    color: "#fff",
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    padding: "12px 0",
+                  }}
+                />
+                {expenseSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setExpenseSearch("")}
+                    aria-label="Clear expense search"
+                    style={{
+                      border: "none",
+                      background: "transparent",
+                      color: "rgba(255,255,255,0.55)",
+                      display: "flex",
+                      alignItems: "center",
+                      cursor: "pointer",
+                      padding: 4,
+                    }}
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              {filteredExpenses.length === 0 && (
+                <div
+                  style={{
+                    padding: "24px 16px",
+                    marginBottom: 8,
+                    border: "1px dashed rgba(255,255,255,0.1)",
+                    borderRadius: 12,
+                    color: "rgba(255,255,255,0.45)",
+                    textAlign: "center",
+                    fontSize: 13,
                   }}
                 >
-                  settled
-                </p>
-              ) : (
-                <p style={{ fontSize: 12, color: "#fb7185", margin: "2px 0 0" }}>
-                  you owe {formatCurrency(myShare)}
-                </p>
+                  No expenses match “{expenseSearch}”. Try another search.
+                </div>
               )}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )}
-</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {filteredExpenses.map((expense: any) => {
+  const paidByMe = expense.paidById === currentUserId
 
+  const currentMember = group.members.find(
+    (member: any) => member.userId === currentUserId
+  )
+
+  const isGroupAdmin =
+    currentMember?.role === "admin" ||
+    group.createdById === currentUserId
+
+  const canDelete =
+    paidByMe || isGroupAdmin
+
+  const myShareSplit = expense.splits?.find(
+    (s: any) => s.userId === currentUserId
+  )
+                const myShare = myShareSplit?.amount ?? 0
+                const isSettled = myShareSplit?.isSettled ?? false
+
+                return (
+                  <div key={expense.id} style={{
+                    padding: "14px 16px",
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.07)",
+                    borderRadius: 12,
+                    display: "flex", alignItems: "center", gap: 12,
+                  }}>
+                    {/* Icon */}
+                    <div style={{
+                      width: 38, height: 38, borderRadius: 10,
+                      background: "rgba(255,255,255,0.05)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 18, flexShrink: 0,
+                    }}>
+                      {CATEGORY_ICONS[expense.category] ?? "📦"}
+                    </div>
+
+                    {/* Info */}
+                    <div className="expense-card-info" style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: "#fff", margin: 0, whiteSpace: "normal", overflowWrap: "anywhere" }}>
+                        {expense.title}
+                      </p>
+                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "2px 0 0" }}>
+                        Paid by {paidByMe ? "you" : expense.paidBy?.name?.split(" ")[0]} · {formatDate(expense.createdAt)}
+                      </p>
+                    </div>
+
+                    {/* Amount */}
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0 }}>
+                        {formatCurrency(expense.amount)}
+                      </p>
+                      {paidByMe ? (
+                        <p style={{ fontSize: 12, color: "#34d399", margin: "2px 0 0" }}>you paid</p>
+                      ) : isSettled ? (
+                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: "2px 0 0" }}>settled</p>
+                      ) : (
+                        <p style={{ fontSize: 12, color: "#fb7185", margin: "2px 0 0" }}>
+                          you owe {formatCurrency(myShare)}
+                        </p>
+                      )}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedExpense(expense)}
+                        aria-label={`View details for ${expense.title}`}
+                        title="View expense details"
+                        style={{
+                          padding: "7px 9px",
+                          borderRadius: 8,
+                          border: "1px solid rgba(255,255,255,0.1)",
+                          background: "rgba(255,255,255,0.04)",
+                          color: "rgba(255,255,255,0.65)",
+                          cursor: "pointer",
+                          fontSize: 11,
+                          fontFamily: "inherit",
+                        }}
+                      >
+                        Details
+                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setExpenseToDelete(expense)}
+                          disabled={deletingExpenseId === expense.id}
+                          aria-label={`Delete ${expense.title}`}
+                          title="Delete expense"
+                          style={{
+                            width: 32,
+                            height: 32,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            borderRadius: 8,
+                            border: "1px solid rgba(251,113,133,0.18)",
+                            background: "rgba(251,113,133,0.07)",
+                            color: "#fb7185",
+                            cursor: deletingExpenseId === expense.id ? "not-allowed" : "pointer",
+                            opacity: deletingExpenseId === expense.id ? 0.5 : 1,
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Right sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -813,6 +834,207 @@ async function markAsPaid(toUserId: string, amount: number) {
           </div>
         </div>
       </div>
+      {toast && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: "fixed",
+            right: 20,
+            bottom: 20,
+            zIndex: 1100,
+            maxWidth: "calc(100vw - 40px)",
+            padding: "12px 16px",
+            borderRadius: 12,
+            background: "#171722",
+            border: "1px solid rgba(255,255,255,0.12)",
+            color: "#fff",
+            boxShadow: "0 12px 36px rgba(0,0,0,0.35)",
+            fontSize: 13,
+          }}
+        >
+          {toast}
+        </div>
+      )}
+
+      {expenseToDelete && (
+  <div
+    onMouseDown={(event) => {
+      if (
+        event.target === event.currentTarget &&
+        !deletingExpenseId
+      ) {
+        setExpenseToDelete(null)
+      }
+    }}
+    style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.72)",
+      backdropFilter: "blur(6px)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 20,
+      zIndex: 1000,
+    }}
+  >
+    <div
+      style={{
+        width: "100%",
+        maxWidth: 420,
+        background: "#111118",
+        border: "1px solid rgba(255,255,255,0.1)",
+        borderRadius: 18,
+        padding: 22,
+        boxShadow: "0 24px 70px rgba(0,0,0,0.5)",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 18,
+        }}
+      >
+        <div
+          style={{
+            width: 42,
+            height: 42,
+            borderRadius: 11,
+            background: "rgba(251,113,133,0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#fb7185",
+          }}
+        >
+          <Trash2 size={19} />
+        </div>
+
+        <button
+          onClick={() => setExpenseToDelete(null)}
+          disabled={!!deletingExpenseId}
+          style={{
+            width: 32,
+            height: 32,
+            borderRadius: 8,
+            border: "1px solid rgba(255,255,255,0.08)",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.5)",
+            cursor: deletingExpenseId
+              ? "not-allowed"
+              : "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <X size={15} />
+        </button>
+      </div>
+
+      <h2
+        style={{
+          margin: "0 0 8px",
+          fontSize: 19,
+          fontWeight: 700,
+          color: "#fff",
+        }}
+      >
+        Delete expense?
+      </h2>
+
+      <p
+        style={{
+          margin: "0 0 8px",
+          fontSize: 14,
+          lineHeight: 1.6,
+          color: "rgba(255,255,255,0.55)",
+        }}
+      >
+        Are you sure you want to delete{" "}
+        <strong style={{ color: "#fff" }}>
+          "{expenseToDelete.title}"
+        </strong>
+        ?
+      </p>
+
+      <p
+        style={{
+          margin: "0 0 20px",
+          fontSize: 12,
+          lineHeight: 1.5,
+          color: "rgba(255,255,255,0.3)",
+        }}
+      >
+        This will remove the expense and its
+        split details and recalculate the
+        group's balances.
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+        }}
+      >
+        <button
+          onClick={() => setExpenseToDelete(null)}
+          disabled={!!deletingExpenseId}
+          style={{
+            flex: 1,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "1px solid rgba(255,255,255,0.1)",
+            background: "rgba(255,255,255,0.04)",
+            color: "rgba(255,255,255,0.7)",
+            cursor: deletingExpenseId
+              ? "not-allowed"
+              : "pointer",
+            fontFamily: "inherit",
+            fontWeight: 600,
+          }}
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={deleteExpense}
+          disabled={!!deletingExpenseId}
+          style={{
+            flex: 1,
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "none",
+            background:
+              "linear-gradient(135deg,#fb7185,#e11d48)",
+            color: "#fff",
+            cursor: deletingExpenseId
+              ? "not-allowed"
+              : "pointer",
+            fontFamily: "inherit",
+            fontWeight: 700,
+            opacity: deletingExpenseId ? 0.6 : 1,
+          }}
+        >
+          {deletingExpenseId
+            ? "Deleting..."
+            : "Delete Expense"}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
+      {selectedExpense && (
+  <ExpenseDetailModal
+    expense={selectedExpense}
+    currentUserId={currentUserId}
+    onClose={() => setSelectedExpense(null)}
+  />
+)}
 
       {showExpenseModal && (
         <AddExpenseModal
