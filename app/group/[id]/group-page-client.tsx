@@ -147,7 +147,17 @@ async function markAsPaid(toUserId: string, amount: number) {
 
 
   return (
-    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif", maxWidth: 1100, margin: "0 auto" }}>
+    <div
+      className="group-page-container"
+      style={{
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+        width: "100%",
+        maxWidth: 1100,
+        margin: "0 auto",
+        padding: "0 16px 32px",
+        overflowX: "hidden",
+      }}
+    >
 
       {/* Header */}
       <div style={{ marginBottom: 28 }}>
@@ -174,7 +184,7 @@ async function markAsPaid(toUserId: string, amount: number) {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div className="group-header-actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button onClick={copyInvite} style={{
               display: "flex", alignItems: "center", gap: 7,
               padding: "9px 16px", borderRadius: 10, fontSize: 13, fontWeight: 500,
@@ -199,7 +209,10 @@ async function markAsPaid(toUserId: string, amount: number) {
       </div>
 
       {/* Summary strip */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 28 }}>
+      <div
+        className="group-summary-grid"
+        style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12, marginBottom: 28 }}
+      >
         {[
           {
             label: "Total Spent",
@@ -271,13 +284,21 @@ async function markAsPaid(toUserId: string, amount: number) {
                 const isSettled = myShareSplit?.isSettled ?? false
 
                 return (
-                  <div key={expense.id} style={{
-                    padding: "14px 16px",
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    borderRadius: 12,
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}>
+                  <div
+                    key={expense.id}
+                    className="expense-card"
+                    style={{
+                      padding: "14px 16px",
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      borderRadius: 12,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      minWidth: 0,
+                      width: "100%",
+                    }}
+                  >
                     {/* Icon */}
                     <div style={{
                       width: 38, height: 38, borderRadius: 10,
@@ -289,8 +310,8 @@ async function markAsPaid(toUserId: string, amount: number) {
                     </div>
 
                     {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: "#fff", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    <div className="expense-card-info" style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 14, fontWeight: 500, color: "#fff", margin: 0, whiteSpace: "normal", overflowWrap: "anywhere" }}>
                         {expense.title}
                       </p>
                       <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "2px 0 0" }}>
@@ -299,8 +320,8 @@ async function markAsPaid(toUserId: string, amount: number) {
                     </div>
 
                     {/* Amount */}
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0 }}>
+                    <div className="expense-amount" style={{ textAlign: "right", flexShrink: 0, minWidth: 0 }}>
+                      <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0, overflowWrap: "anywhere" }}>
                         {formatCurrency(expense.amount)}
                       </p>
                       {paidByMe ? (
