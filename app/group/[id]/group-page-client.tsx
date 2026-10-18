@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { formatCurrency, formatDate, getInitials } from "@/lib/utils"
 import AddExpenseModal from "@/components/add-expense-modal"
-import { ArrowLeft, Copy, Plus, Check, Share2, MessageCircle } from "lucide-react"
 import { useSocket } from "@/hooks/use-socket"
+import { ArrowLeft, Copy, Plus, Check, Share2, MessageCircle, Search, X } from "lucide-react"
 
 const CATEGORY_ICONS: Record<string, string> = {
   food: "🍕", transport: "🚗", accommodation: "🏠",
@@ -30,9 +30,16 @@ export default function GroupPageClient({
 const [copied, setCopied] = useState(false)
 const [expenses, setExpenses] = useState<any[]>(group.expenses)
 const [toast, setToast] = useState<string | null>(null)
+const [searchQuery, setSearchQuery] = useState("")
 
 const router = useRouter()
 const socket = useSocket()
+
+const filteredExpenses = expenses.filter((expense: any) =>
+  (expense.title ?? "")
+    .toLowerCase()
+    .includes(searchQuery.trim().toLowerCase())
+)
 
 useEffect(() => {
   if (!socket) return
@@ -94,7 +101,6 @@ async function shareInvite() {
 }
   // Build clear settle-up suggestions
   
-  // "Ishaa owes Mrunal ₹500" or "Mrunal owes Ishaa ₹2000"
   const settlements: { from: any; to: any; amount: number }[] = []
   const memberMap = Object.fromEntries(group.members.map((m: any) => [m.userId, m.user]))
 
@@ -244,81 +250,277 @@ async function markAsPaid(toUserId: string, amount: number) {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 20 }} className="group-layout">
         <style>{`@media(max-width:900px){.group-layout{grid-template-columns:1fr!important}}`}</style>
 
-        {/* Left — Expenses */}
-        <div>
-          <p style={{ fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.35)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>
-            Expenses
-          </p>
+        
+{/* Left — Expenses */}
+<div style={{ minWidth: 0 }}>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 12,
+      marginBottom: 12,
+    }}
+  >
+    <p
+      style={{
+        fontSize: 12,
+        fontWeight: 600,
+        color: "rgba(255,255,255,0.35)",
+        textTransform: "uppercase",
+        letterSpacing: "0.07em",
+        margin: 0,
+      }}
+    >
+      Expenses
+    </p>
 
-          {expenses.length === 0 ? (
-            <div style={{ padding: "48px 24px", background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.07)", borderRadius: 16, textAlign: "center" }}>
-              <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
-              <p style={{ fontSize: 14, color: "rgba(255,255,255,0.5)", margin: "0 0 16px" }}>No expenses yet</p>
-              <button onClick={() => setShowExpenseModal(true)} style={{
-                padding: "9px 18px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                border: "none", background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
-                color: "#fff", cursor: "pointer", fontFamily: "inherit",
-              }}>
-                Add first expense
-              </button>
+    {expenses.length > 0 && (
+      <span style={{ fontSize: 12, color: "rgba(255,255,255,0.3)" }}>
+        {filteredExpenses.length} of {expenses.length}
+      </span>
+    )}
+  </div>
+
+  {/* Search expenses */}
+  {expenses.length > 0 && (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        padding: "0 12px",
+        marginBottom: 14,
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid rgba(255,255,255,0.08)",
+        borderRadius: 10,
+      }}
+    >
+      <Search size={16} color="rgba(255,255,255,0.35)" />
+
+      <input
+        type="search"
+        aria-label="Search expenses"
+        placeholder="Search expenses by name..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          padding: "12px 0",
+          background: "transparent",
+          border: "none",
+          outline: "none",
+          color: "#fff",
+          fontSize: 13,
+          fontFamily: "inherit",
+        }}
+      />
+
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => setSearchQuery("")}
+          aria-label="Clear expense search"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 4,
+            border: "none",
+            background: "transparent",
+            color: "rgba(255,255,255,0.5)",
+            cursor: "pointer",
+          }}
+        >
+          <X size={15} />
+        </button>
+      )}
+    </div>
+  )}
+
+  {expenses.length === 0 ? (
+    <div
+      style={{
+        padding: "48px 24px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px dashed rgba(255,255,255,0.07)",
+        borderRadius: 16,
+        textAlign: "center",
+      }}
+    >
+      <div style={{ fontSize: 32, marginBottom: 10 }}>🧾</div>
+      <p
+        style={{
+          fontSize: 14,
+          color: "rgba(255,255,255,0.5)",
+          margin: "0 0 16px",
+        }}
+      >
+        No expenses yet
+      </p>
+      <button
+        onClick={() => setShowExpenseModal(true)}
+        style={{
+          padding: "9px 18px",
+          borderRadius: 10,
+          fontSize: 13,
+          fontWeight: 600,
+          border: "none",
+          background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+          color: "#fff",
+          cursor: "pointer",
+          fontFamily: "inherit",
+        }}
+      >
+        Add first expense
+      </button>
+    </div>
+  ) : filteredExpenses.length === 0 ? (
+    <div
+      style={{
+        padding: "36px 20px",
+        background: "rgba(255,255,255,0.02)",
+        border: "1px dashed rgba(255,255,255,0.07)",
+        borderRadius: 16,
+        textAlign: "center",
+      }}
+    >
+      <Search
+        size={26}
+        color="rgba(255,255,255,0.3)"
+        style={{ margin: "0 auto 10px" }}
+      />
+      <p style={{ fontSize: 14, color: "rgba(255,255,255,0.6)", margin: "0 0 6px" }}>
+        No expenses found
+      </p>
+      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: 0 }}>
+        Try another search term.
+      </p>
+      <button
+        type="button"
+        onClick={() => setSearchQuery("")}
+        style={{
+          marginTop: 14,
+          padding: "8px 14px",
+          borderRadius: 8,
+          border: "1px solid rgba(99,102,241,0.3)",
+          background: "rgba(99,102,241,0.1)",
+          color: "#a5b4fc",
+          cursor: "pointer",
+          fontSize: 12,
+        }}
+      >
+        Clear search
+      </button>
+    </div>
+  ) : (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {filteredExpenses.map((expense: any) => {
+        const paidByMe = expense.paidById === currentUserId
+        const myShareSplit = expense.splits?.find(
+          (s: any) => s.userId === currentUserId
+        )
+        const myShare = myShareSplit?.amount ?? 0
+        const isSettled = myShareSplit?.isSettled ?? false
+
+        return (
+          <div
+            key={expense.id}
+            style={{
+              padding: "14px 16px",
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              borderRadius: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              minWidth: 0,
+            }}
+          >
+            {/* Icon */}
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: "rgba(255,255,255,0.05)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+                flexShrink: 0,
+              }}
+            >
+              {CATEGORY_ICONS[expense.category] ?? "📦"}
             </div>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {expenses.map((expense: any) => {
-                const paidByMe = expense.paidById === currentUserId
-                const myShareSplit = expense.splits?.find((s: any) => s.userId === currentUserId)
-                const myShare = myShareSplit?.amount ?? 0
-                const isSettled = myShareSplit?.isSettled ?? false
 
-                return (
-                  <div key={expense.id} style={{
-                    padding: "14px 16px",
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.07)",
-                    borderRadius: 12,
-                    display: "flex", alignItems: "center", gap: 12,
-                  }}>
-                    {/* Icon */}
-                    <div style={{
-                      width: 38, height: 38, borderRadius: 10,
-                      background: "rgba(255,255,255,0.05)",
-                      display: "flex", alignItems: "center", justifyContent: "center",
-                      fontSize: 18, flexShrink: 0,
-                    }}>
-                      {CATEGORY_ICONS[expense.category] ?? "📦"}
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ fontSize: 14, fontWeight: 500, color: "#fff", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {expense.title}
-                      </p>
-                      <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", margin: "2px 0 0" }}>
-                        Paid by {paidByMe ? "you" : expense.paidBy?.name?.split(" ")[0]} · {formatDate(expense.createdAt)}
-                      </p>
-                    </div>
-
-                    {/* Amount */}
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <p style={{ fontSize: 15, fontWeight: 700, color: "#fff", margin: 0 }}>
-                        {formatCurrency(expense.amount)}
-                      </p>
-                      {paidByMe ? (
-                        <p style={{ fontSize: 12, color: "#34d399", margin: "2px 0 0" }}>you paid</p>
-                      ) : isSettled ? (
-                        <p style={{ fontSize: 12, color: "rgba(255,255,255,0.25)", margin: "2px 0 0" }}>settled</p>
-                      ) : (
-                        <p style={{ fontSize: 12, color: "#fb7185", margin: "2px 0 0" }}>
-                          you owe {formatCurrency(myShare)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+            {/* Info */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p
+                style={{
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: "#fff",
+                  margin: 0,
+                  overflowWrap: "anywhere",
+                }}
+              >
+                {expense.title}
+              </p>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "rgba(255,255,255,0.3)",
+                  margin: "2px 0 0",
+                }}
+              >
+                Paid by {paidByMe ? "you" : expense.paidBy?.name?.split(" ")[0]}{" "}
+                · {formatDate(expense.createdAt)}
+              </p>
             </div>
-          )}
-        </div>
+
+            {/* Amount */}
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <p
+                style={{
+                  fontSize: 15,
+                  fontWeight: 700,
+                  color: "#fff",
+                  margin: 0,
+                }}
+              >
+                {formatCurrency(expense.amount)}
+              </p>
+
+              {paidByMe ? (
+                <p style={{ fontSize: 12, color: "#34d399", margin: "2px 0 0" }}>
+                  you paid
+                </p>
+              ) : isSettled ? (
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "rgba(255,255,255,0.25)",
+                    margin: "2px 0 0",
+                  }}
+                >
+                  settled
+                </p>
+              ) : (
+                <p style={{ fontSize: 12, color: "#fb7185", margin: "2px 0 0" }}>
+                  you owe {formatCurrency(myShare)}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )}
+</div>
+
 
         {/* Right sidebar */}
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
